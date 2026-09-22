@@ -1,0 +1,1068 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Decision Cards — a lightweight, local-first weighted pros/cons tool for comparing options and ranking decisions.">
+<title>Decision Cards</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%96%EF%B8%8F%3C/text%3E%3C/svg%3E">
+<style>
+  :root{
+    --bg:#ffffff;
+    --text:#1e222a;
+    --muted:#6b7280;
+    --border:#e0e2e7;
+    --border-strong:#c7cad1;
+    --accent:#2f5fdb;
+    --accent-text:#ffffff;
+    --danger:#b3261e;
+    --pos:#1a7f37;
+    --neg:#b3261e;
+    --row-hover:#f5f6f8;
+    --panel:#fafafb;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-size:14px;
+    line-height:1.45;
+    padding:20px;
+    max-width:1200px;
+    margin:0 auto;
+  }
+  h1{font-size:20px;font-weight:600;margin:0;}
+  h2{font-size:15px;font-weight:600;margin:0 0 4px 0;}
+  button{
+    font-family:inherit;
+    font-size:13px;
+    background:var(--bg);
+    color:var(--text);
+    border:1px solid var(--border-strong);
+    border-radius:4px;
+    padding:6px 12px;
+    cursor:pointer;
+  }
+  button:hover{background:var(--row-hover);}
+  button.primary{background:var(--accent);color:var(--accent-text);border-color:var(--accent);}
+  button.primary:hover{opacity:0.92;}
+  button.danger{color:var(--danger);border-color:var(--danger);}
+  button.danger:hover{background:#fbeceb;}
+  button.subtle{border-color:transparent;color:var(--muted);padding:4px 8px;}
+  button.subtle:hover{background:var(--row-hover);color:var(--text);}
+  input[type="text"],input[type="number"],textarea,select{
+    font-family:inherit;
+    font-size:13px;
+    color:var(--text);
+    background:var(--bg);
+    border:1px solid var(--border);
+    border-radius:4px;
+    padding:6px 8px;
+  }
+  input:focus,textarea:focus,select:focus{outline:1px solid var(--accent);border-color:var(--accent);}
+  textarea{resize:vertical;min-height:44px;font-family:inherit;}
+
+  .topbar{
+    display:flex;justify-content:space-between;align-items:center;
+    padding-bottom:14px;border-bottom:1px solid var(--border);margin-bottom:14px;
+    flex-wrap:wrap;gap:10px;
+  }
+  .actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;position:relative;}
+  .dropdown{position:relative;display:inline-block;}
+  .menu{
+    display:none;position:absolute;top:calc(100% + 4px);right:0;
+    background:var(--bg);border:1px solid var(--border-strong);border-radius:4px;
+    min-width:170px;box-shadow:0 2px 6px rgba(0,0,0,0.08);z-index:20;overflow:hidden;
+  }
+  .menu.open{display:block;}
+  .menu button{width:100%;text-align:left;border:none;border-radius:0;padding:8px 12px;}
+  .menu button:hover{background:var(--row-hover);}
+
+  #corruptedBanner{
+    background:#fff6e5;border:1px solid #e6b95c;color:#6b4a00;
+    padding:12px 14px;border-radius:4px;margin-bottom:16px;
+  }
+  #corruptedBanner p{margin:0 0 8px 0;}
+  #corruptedBanner .banner-actions{display:flex;gap:8px;}
+
+  .toast{
+    position:fixed;bottom:18px;right:18px;background:#1e222a;color:#fff;
+    padding:9px 14px;border-radius:4px;font-size:13px;z-index:50;
+    box-shadow:0 2px 8px rgba(0,0,0,0.2);
+  }
+
+  .controls{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center;}
+  .controls input[type="text"]{flex:1;min-width:180px;}
+  .controls select{flex:0 0 auto;min-width:150px;}
+  .visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}
+
+  .table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:4px;margin-bottom:22px;}
+  table{width:100%;border-collapse:collapse;min-width:480px;}
+  thead th{
+    text-align:left;font-weight:600;font-size:12px;color:var(--muted);
+    padding:8px 10px;border-bottom:1px solid var(--border);background:var(--panel);
+    white-space:nowrap;
+  }
+  tbody td{padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:top;}
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr{cursor:pointer;}
+  tbody tr:hover{background:var(--row-hover);}
+  tbody tr.highlight{background:#eef2fd;}
+  td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
+  td.title-cell{font-weight:500;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .net-pos{color:var(--pos);}
+  .net-neg{color:var(--neg);}
+  .empty-row td{color:var(--muted);text-align:center;padding:18px;}
+
+  .cards-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(320px,1fr));
+    gap:14px;
+  }
+  .card{
+    border:1px solid var(--border);border-radius:5px;padding:14px;background:var(--bg);
+  }
+  .card.highlight{border-color:var(--accent);}
+  .card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px;}
+  .card-head .rank-badge{
+    font-size:11px;font-weight:600;color:var(--muted);border:1px solid var(--border);
+    border-radius:3px;padding:2px 6px;white-space:nowrap;
+  }
+  .card input[type="text"].title-input{
+    width:100%;font-size:15px;font-weight:600;border:1px solid transparent;padding:4px 6px;margin:-4px -6px 4px -6px;
+  }
+  .card input[type="text"].title-input:hover,.card input[type="text"].title-input:focus{border-color:var(--border);}
+  .card textarea.desc-input{width:100%;border:1px solid transparent;padding:4px 6px;margin:0 0 8px -6px;color:var(--muted);}
+  .card textarea.desc-input:hover,.card textarea.desc-input:focus{border-color:var(--border);color:var(--text);}
+
+  .section-label{font-size:11px;font-weight:600;text-transform:none;color:var(--muted);margin:10px 0 4px 0;display:flex;justify-content:space-between;align-items:center;}
+  .item-row{display:flex;gap:6px;align-items:center;margin-bottom:4px;}
+  .item-row input[type="text"]{flex:1;min-width:0;}
+  .item-row input[type="number"]{width:72px;min-width:72px;text-align:right;flex:0 0 auto;}
+  .item-row button{padding:4px 8px;line-height:1;}
+
+  .card-footer{
+    margin-top:12px;padding-top:10px;border-top:1px solid var(--border);
+    display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;
+  }
+  .score-line{font-size:12px;color:var(--muted);}
+  .score-line strong{color:var(--text);}
+  .card-buttons{display:flex;gap:6px;}
+
+  .hint{font-size:12px;color:var(--muted);margin-top:2px;}
+  footer.appfoot{margin-top:24px;font-size:12px;color:var(--muted);text-align:center;}
+
+  @media (max-width:640px){
+    body{padding:12px;}
+    .topbar{align-items:flex-start;}
+  }
+</style>
+</head>
+<body>
+
+<div id="corruptedBanner" style="display:none;">
+  <p><strong>Saved data could not be read.</strong> Your existing data on this device looks corrupted or invalid. It has <strong>not</strong> been changed or erased. Import a valid JSON backup to recover it, or start fresh (this will permanently erase the unreadable data).</p>
+  <div class="banner-actions">
+    <button class="primary" onclick="triggerImport()">Import Backup</button>
+    <button class="danger" onclick="startFreshAfterCorruption()">Start Fresh</button>
+  </div>
+</div>
+
+<div id="app" style="display:none;">
+  <header class="topbar">
+    <h1>Decision Cards</h1>
+    <div class="actions">
+      <button class="primary" onclick="createCard()">+ New Card</button>
+      <div class="dropdown">
+        <button onclick="toggleMenu('exportMenu')">Export ▾</button>
+        <div id="exportMenu" class="menu">
+          <button onclick="exportJSON()">Export JSON</button>
+          <button onclick="exportCSV()">Export CSV</button>
+          <button onclick="exportHTMLReport()">Export HTML Report</button>
+        </div>
+      </div>
+      <button onclick="triggerImport()">Import</button>
+      <button id="restoreBtn" style="display:none;" onclick="restoreBackup()">Restore Previous Data</button>
+    </div>
+  </header>
+
+  <section class="controls">
+    <label for="searchInput" class="visually-hidden">Search cards</label>
+    <input type="text" id="searchInput" placeholder="Search cards by title or description…" oninput="render()">
+    <label for="sortSelect" class="visually-hidden">Sort cards</label>
+    <select id="sortSelect" onchange="render()">
+      <option value="rank">Sort: Rank</option>
+      <option value="net">Sort: Net Score</option>
+      <option value="pros">Sort: Pros Score</option>
+      <option value="cons">Sort: Cons Score</option>
+      <option value="title">Sort: Title</option>
+    </select>
+  </section>
+
+  <section class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Rank</th>
+          <th>Option</th>
+          <th>Pros</th>
+          <th>Cons</th>
+          <th>Net</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </section>
+
+  <section id="cardsContainer" class="cards-grid"></section>
+
+  <footer class="appfoot">Data is saved automatically to this browser only.</footer>
+</div>
+
+<input type="file" id="importFile" accept=".json,application/json" style="display:none;">
+
+<script>
+(function(){
+  "use strict";
+
+  var STORAGE_KEY = "decisionCardsData";
+  var BACKUP_KEY = "decisionCardsData_backup";
+
+  var appData = null;      // in-memory working dataset
+  var corrupted = false;   // true if stored data could not be parsed/validated
+  var highlightId = null;  // card id to briefly highlight
+  var toastTimer = null;
+
+  // ---------- utilities ----------
+
+  function genId(prefix){
+    return prefix + "_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2,8);
+  }
+
+  function sum(arr){
+    var t = 0;
+    for (var i=0;i<arr.length;i++){ t += arr[i]; }
+    return t;
+  }
+
+  function toNumber(v){
+    var n = parseFloat(v);
+    return isNaN(n) ? 0 : n;
+  }
+
+  function formatNumber(n){
+    // round to 2 decimals, strip trailing zeros
+    var r = Math.round((n + Number.EPSILON) * 100) / 100;
+    var s = r.toString();
+    return s;
+  }
+
+  function formatNet(n){
+    var f = formatNumber(n);
+    if (n > 0 && f.charAt(0) !== "+") return "+" + f;
+    if (n === 0) return "+0";
+    return f;
+  }
+
+  function escapeHtml(str){
+    return String(str).replace(/[&<>"']/g, function(ch){
+      return ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[ch];
+    });
+  }
+
+  function csvEscape(val){
+    var s = String(val === undefined || val === null ? "" : val);
+    if (/[",\n\r]/.test(s)){
+      s = '"' + s.replace(/"/g, '""') + '"';
+    }
+    return s;
+  }
+
+  function showToast(msg){
+    var t = document.getElementById("toast");
+    if (!t){
+      t = document.createElement("div");
+      t.id = "toast";
+      t.className = "toast";
+      document.body.appendChild(t);
+    }
+    t.textContent = msg;
+    t.style.display = "block";
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ t.style.display = "none"; }, 2200);
+  }
+
+  function downloadBlob(content, filename, mime){
+    var blob = new Blob([content], {type: mime});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+  }
+
+  function todayStr(){
+    var d = new Date();
+    var pad = function(n){ return (n<10?"0":"")+n; };
+    return d.getFullYear() + "-" + pad(d.getMonth()+1) + "-" + pad(d.getDate());
+  }
+
+  // ---------- data model ----------
+
+  function emptyData(){
+    return { version: 1, cards: [] };
+  }
+
+  function newCard(title){
+    return {
+      id: genId("card"),
+      title: title || "New Option",
+      description: "",
+      pros: [],
+      cons: []
+    };
+  }
+
+  function newItem(){
+    return { id: genId("item"), text: "", weight: 1 };
+  }
+
+  function validateData(obj){
+    if (!obj || typeof obj !== "object") return false;
+    if (typeof obj.version !== "number") return false;
+    if (!Array.isArray(obj.cards)) return false;
+    for (var i=0;i<obj.cards.length;i++){
+      var c = obj.cards[i];
+      if (!c || typeof c !== "object") return false;
+      if (typeof c.id !== "string" || !c.id) return false;
+      if (typeof c.title !== "string") return false;
+      if (typeof c.description !== "string" && c.description !== undefined && c.description !== null) return false;
+      if (!Array.isArray(c.pros) || !Array.isArray(c.cons)) return false;
+      var lists = c.pros.concat(c.cons);
+      for (var j=0;j<lists.length;j++){
+        var it = lists[j];
+        if (!it || typeof it !== "object") return false;
+        if (typeof it.id !== "string" || !it.id) return false;
+        if (typeof it.text !== "string" && it.text !== undefined) return false;
+        if (typeof it.weight !== "number" && typeof it.weight !== "string") return false;
+      }
+    }
+    return true;
+  }
+
+  function normalizeData(obj){
+    // fill in any missing optional fields safely after validation
+    obj.cards.forEach(function(c){
+      if (typeof c.description !== "string") c.description = "";
+      c.pros.forEach(function(p){
+        if (typeof p.text !== "string") p.text = "";
+        p.weight = toNumber(p.weight);
+      });
+      c.cons.forEach(function(p){
+        if (typeof p.text !== "string") p.text = "";
+        p.weight = toNumber(p.weight);
+      });
+    });
+    return obj;
+  }
+
+  function saveData(){
+    if (corrupted) return; // never overwrite unresolved corrupted state
+    try{
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+    }catch(e){
+      showToast("Could not save: storage error");
+    }
+  }
+
+  function loadData(){
+    var raw;
+    try{
+      raw = localStorage.getItem(STORAGE_KEY);
+    }catch(e){
+      raw = null;
+    }
+    if (raw === null){
+      appData = emptyData();
+      saveData();
+      return;
+    }
+    try{
+      var parsed = JSON.parse(raw);
+      if (!validateData(parsed)){
+        throw new Error("schema invalid");
+      }
+      appData = normalizeData(parsed);
+      corrupted = false;
+    }catch(e){
+      corrupted = true;
+      appData = emptyData();
+    }
+  }
+
+  // ---------- calculations ----------
+
+  function computeScore(card){
+    var pros = sum(card.pros.map(function(p){ return toNumber(p.weight); }));
+    var cons = sum(card.cons.map(function(p){ return toNumber(p.weight); }));
+    return { pros: pros, cons: cons, net: pros - cons };
+  }
+
+  function computeAllScores(cards){
+    var map = {};
+    cards.forEach(function(c){ map[c.id] = computeScore(c); });
+    return map;
+  }
+
+  function computeRanks(cards, scoreMap){
+    var sorted = cards.slice().sort(function(a,b){ return scoreMap[b.id].net - scoreMap[a.id].net; });
+    var ranks = {};
+    var count = 0, rank = 0, prevNet = null;
+    sorted.forEach(function(c){
+      count++;
+      var net = scoreMap[c.id].net;
+      if (prevNet === null || net !== prevNet){
+        rank = count;
+        prevNet = net;
+      }
+      ranks[c.id] = rank;
+    });
+    return ranks;
+  }
+
+  // ---------- mutation helpers ----------
+
+  function mutate(fn){
+    fn(appData);
+    saveData();
+    render();
+  }
+
+  function findCard(id){
+    for (var i=0;i<appData.cards.length;i++){
+      if (appData.cards[i].id === id) return appData.cards[i];
+    }
+    return null;
+  }
+
+  // ---------- CRUD actions ----------
+
+  window.createCard = function(){
+    var c = newCard();
+    mutate(function(data){ data.cards.push(c); });
+    highlightId = c.id;
+    scrollToCard(c.id);
+  };
+
+  window.duplicateCard = function(id){
+    var orig = findCard(id);
+    if (!orig) return;
+    var copy = {
+      id: genId("card"),
+      title: orig.title + " (Copy)",
+      description: orig.description,
+      pros: orig.pros.map(function(p){ return { id: genId("item"), text: p.text, weight: p.weight }; }),
+      cons: orig.cons.map(function(p){ return { id: genId("item"), text: p.text, weight: p.weight }; })
+    };
+    var idx = appData.cards.findIndex(function(c){ return c.id === id; });
+    mutate(function(data){ data.cards.splice(idx+1, 0, copy); });
+    highlightId = copy.id;
+    scrollToCard(copy.id);
+    showToast("Card duplicated");
+  };
+
+  window.deleteCard = function(id){
+    var card = findCard(id);
+    if (!card) return;
+    var label = card.title || "this card";
+    if (!confirm('Delete "' + label + '"? This cannot be undone.')) return;
+    mutate(function(data){
+      data.cards = data.cards.filter(function(c){ return c.id !== id; });
+    });
+    showToast("Card deleted");
+  };
+
+  window.addPro = function(cardId){
+    var card = findCard(cardId);
+    if (!card) return;
+    var item = newItem();
+    mutate(function(){ card.pros.push(item); });
+  };
+
+  window.addCon = function(cardId){
+    var card = findCard(cardId);
+    if (!card) return;
+    var item = newItem();
+    mutate(function(){ card.cons.push(item); });
+  };
+
+  window.deleteItem = function(cardId, type, itemId){
+    var card = findCard(cardId);
+    if (!card) return;
+    mutate(function(){
+      card[type] = card[type].filter(function(it){ return it.id !== itemId; });
+    });
+  };
+
+  window.updateCardField = function(cardId, field, value){
+    var card = findCard(cardId);
+    if (!card) return;
+    card[field] = value;
+    saveData();
+    // live-update only the score/rank/table parts without full rebuild of the field being typed in
+    renderTableAndScores();
+  };
+
+  window.updateItemField = function(cardId, type, itemId, field, value){
+    var card = findCard(cardId);
+    if (!card) return;
+    var item = card[type].find(function(it){ return it.id === itemId; });
+    if (!item) return;
+    if (field === "weight"){
+      item.weight = toNumber(value);
+    } else {
+      item.text = value;
+    }
+    saveData();
+    renderTableAndScores();
+  };
+
+  // ---------- rendering ----------
+
+  function getFilteredSorted(){
+    var query = document.getElementById("searchInput").value.trim().toLowerCase();
+    var sortKey = document.getElementById("sortSelect").value;
+    var scoreMap = computeAllScores(appData.cards);
+    var ranks = computeRanks(appData.cards, scoreMap);
+
+    var filtered = appData.cards.filter(function(c){
+      if (!query) return true;
+      return (c.title || "").toLowerCase().indexOf(query) !== -1 ||
+             (c.description || "").toLowerCase().indexOf(query) !== -1;
+    });
+
+    filtered.sort(function(a,b){
+      switch(sortKey){
+        case "title": return (a.title||"").localeCompare(b.title||"");
+        case "net": return scoreMap[b.id].net - scoreMap[a.id].net;
+        case "pros": return scoreMap[b.id].pros - scoreMap[a.id].pros;
+        case "cons": return scoreMap[b.id].cons - scoreMap[a.id].cons;
+        case "rank":
+        default: return ranks[a.id] - ranks[b.id];
+      }
+    });
+
+    return { list: filtered, scoreMap: scoreMap, ranks: ranks };
+  }
+
+  function renderTableAndScores(){
+    var res = getFilteredSorted();
+    renderTable(res.list, res.scoreMap, res.ranks);
+    updateCardFooters(res.scoreMap, res.ranks);
+  }
+
+  function render(){
+    if (corrupted){
+      document.getElementById("app").style.display = "none";
+      document.getElementById("corruptedBanner").style.display = "block";
+      return;
+    }
+    document.getElementById("app").style.display = "block";
+    document.getElementById("corruptedBanner").style.display = "none";
+
+    var res = getFilteredSorted();
+    renderTable(res.list, res.scoreMap, res.ranks);
+    renderCards(res.list, res.scoreMap, res.ranks);
+    refreshRestoreButton();
+  }
+
+  function renderTable(list, scoreMap, ranks){
+    var tbody = document.getElementById("tableBody");
+    tbody.innerHTML = "";
+
+    if (list.length === 0){
+      var tr = document.createElement("tr");
+      tr.className = "empty-row";
+      var td = document.createElement("td");
+      td.colSpan = 5;
+      td.textContent = appData.cards.length === 0 ? "No cards yet. Click \"+ New Card\" to add one." : "No cards match your search.";
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+      return;
+    }
+
+    list.forEach(function(c){
+      var s = scoreMap[c.id];
+      var tr = document.createElement("tr");
+      tr.dataset.cardId = c.id;
+      if (c.id === highlightId) tr.className = "highlight";
+      tr.addEventListener("click", function(){
+        highlightId = c.id;
+        scrollToCard(c.id);
+        render();
+      });
+
+      var tdRank = document.createElement("td");
+      tdRank.textContent = "#" + ranks[c.id];
+      tr.appendChild(tdRank);
+
+      var tdTitle = document.createElement("td");
+      tdTitle.className = "title-cell";
+      tdTitle.textContent = c.title || "(untitled)";
+      tr.appendChild(tdTitle);
+
+      var tdPros = document.createElement("td");
+      tdPros.className = "num";
+      tdPros.textContent = formatNumber(s.pros);
+      tr.appendChild(tdPros);
+
+      var tdCons = document.createElement("td");
+      tdCons.className = "num";
+      tdCons.textContent = formatNumber(s.cons);
+      tr.appendChild(tdCons);
+
+      var tdNet = document.createElement("td");
+      tdNet.className = "num " + (s.net >= 0 ? "net-pos" : "net-neg");
+      tdNet.textContent = formatNet(s.net);
+      tr.appendChild(tdNet);
+
+      tbody.appendChild(tr);
+    });
+  }
+
+  function updateCardFooters(scoreMap, ranks){
+    appData.cards.forEach(function(c){
+      var el = document.querySelector('.card[data-card-id="' + cssEscape(c.id) + '"]');
+      if (!el) return;
+      var s = scoreMap[c.id];
+      var prosScoreEl = el.querySelector(".prosScore");
+      var consScoreEl = el.querySelector(".consScore");
+      var netScoreEl = el.querySelector(".netScore");
+      var rankEl = el.querySelector(".rankBadge");
+      if (prosScoreEl) prosScoreEl.textContent = formatNumber(s.pros);
+      if (consScoreEl) consScoreEl.textContent = formatNumber(s.cons);
+      if (netScoreEl){
+        netScoreEl.textContent = formatNet(s.net);
+        netScoreEl.className = "netScore " + (s.net >= 0 ? "net-pos" : "net-neg");
+      }
+      if (rankEl) rankEl.textContent = "Rank #" + ranks[c.id];
+    });
+  }
+
+  function cssEscape(s){
+    return String(s).replace(/[^a-zA-Z0-9_\-]/g, "\\$&");
+  }
+
+  function scrollToCard(id){
+    setTimeout(function(){
+      var el = document.querySelector('.card[data-card-id="' + cssEscape(id) + '"]');
+      if (el && el.scrollIntoView){
+        el.scrollIntoView({block:"center"});
+      }
+      setTimeout(function(){
+        highlightId = null;
+        render();
+      }, 1200);
+    }, 0);
+  }
+
+  function renderCards(list, scoreMap, ranks){
+    var container = document.getElementById("cardsContainer");
+    container.innerHTML = "";
+
+    list.forEach(function(c){
+      var s = scoreMap[c.id];
+      var card = document.createElement("div");
+      card.className = "card" + (c.id === highlightId ? " highlight" : "");
+      card.dataset.cardId = c.id;
+
+      // header: rank badge
+      var head = document.createElement("div");
+      head.className = "card-head";
+      var titleWrap = document.createElement("div");
+      titleWrap.style.flex = "1";
+      titleWrap.style.minWidth = "0";
+      var rankBadge = document.createElement("span");
+      rankBadge.className = "rank-badge rankBadge";
+      rankBadge.textContent = "Rank #" + ranks[c.id];
+      head.appendChild(titleWrap);
+      head.appendChild(rankBadge);
+      card.appendChild(head);
+
+      // title input
+      var titleInput = document.createElement("input");
+      titleInput.type = "text";
+      titleInput.className = "title-input";
+      titleInput.value = c.title;
+      titleInput.placeholder = "Option title";
+      titleInput.setAttribute("aria-label", "Option title");
+      titleInput.addEventListener("input", function(){
+        window.updateCardField(c.id, "title", titleInput.value);
+      });
+      card.appendChild(titleInput);
+
+      // description
+      var descInput = document.createElement("textarea");
+      descInput.className = "desc-input";
+      descInput.rows = 2;
+      descInput.placeholder = "Description / notes";
+      descInput.setAttribute("aria-label", "Description or notes");
+      descInput.value = c.description;
+      descInput.addEventListener("input", function(){
+        window.updateCardField(c.id, "description", descInput.value);
+      });
+      card.appendChild(descInput);
+
+      // pros section
+      card.appendChild(buildItemSection(c, "pros", "PROS", "+ Add Pro"));
+      // cons section
+      card.appendChild(buildItemSection(c, "cons", "CONS", "+ Add Con"));
+
+      // footer
+      var footer = document.createElement("div");
+      footer.className = "card-footer";
+
+      var scoreLine = document.createElement("div");
+      scoreLine.className = "score-line";
+      scoreLine.innerHTML =
+        'Pros: <strong class="prosScore">' + formatNumber(s.pros) + '</strong> &nbsp; ' +
+        'Cons: <strong class="consScore">' + formatNumber(s.cons) + '</strong> &nbsp; ' +
+        'Net: <strong class="netScore ' + (s.net>=0?"net-pos":"net-neg") + '">' + formatNet(s.net) + '</strong>';
+      footer.appendChild(scoreLine);
+
+      var btnWrap = document.createElement("div");
+      btnWrap.className = "card-buttons";
+
+      var dupBtn = document.createElement("button");
+      dupBtn.textContent = "Duplicate";
+      dupBtn.addEventListener("click", function(e){ e.stopPropagation(); window.duplicateCard(c.id); });
+
+      var delBtn = document.createElement("button");
+      delBtn.className = "danger";
+      delBtn.textContent = "Delete";
+      delBtn.addEventListener("click", function(e){ e.stopPropagation(); window.deleteCard(c.id); });
+
+      btnWrap.appendChild(dupBtn);
+      btnWrap.appendChild(delBtn);
+      footer.appendChild(btnWrap);
+
+      card.appendChild(footer);
+      container.appendChild(card);
+    });
+  }
+
+  function buildItemSection(card, type, label, addLabel){
+    var wrap = document.createElement("div");
+
+    var lbl = document.createElement("div");
+    lbl.className = "section-label";
+    var span = document.createElement("span");
+    span.textContent = label;
+    var addBtn = document.createElement("button");
+    addBtn.className = "subtle";
+    addBtn.textContent = addLabel;
+    addBtn.addEventListener("click", function(e){
+      e.stopPropagation();
+      if (type === "pros") window.addPro(card.id);
+      else window.addCon(card.id);
+    });
+    lbl.appendChild(span);
+    lbl.appendChild(addBtn);
+    wrap.appendChild(lbl);
+
+    var items = card[type];
+    if (items.length === 0){
+      var hint = document.createElement("div");
+      hint.className = "hint";
+      hint.textContent = "No " + (type === "pros" ? "pros" : "cons") + " yet.";
+      wrap.appendChild(hint);
+    }
+
+    items.forEach(function(item){
+      var row = document.createElement("div");
+      row.className = "item-row";
+
+      var textInput = document.createElement("input");
+      textInput.type = "text";
+      textInput.placeholder = type === "pros" ? "Pro description" : "Con description";
+      textInput.setAttribute("aria-label", (type === "pros" ? "Pro" : "Con") + " description");
+      textInput.value = item.text;
+      textInput.addEventListener("input", function(){
+        window.updateItemField(card.id, type, item.id, "text", textInput.value);
+      });
+
+      var weightInput = document.createElement("input");
+      weightInput.type = "number";
+      weightInput.step = "0.1";
+      weightInput.value = item.weight;
+      weightInput.title = "Weight";
+      weightInput.setAttribute("aria-label", "Weight");
+      weightInput.addEventListener("input", function(){
+        window.updateItemField(card.id, type, item.id, "weight", weightInput.value);
+      });
+
+      var delBtn = document.createElement("button");
+      delBtn.className = "subtle";
+      delBtn.textContent = "✕";
+      delBtn.title = "Delete";
+      delBtn.setAttribute("aria-label", "Delete " + (type === "pros" ? "pro" : "con") + " item");
+      delBtn.addEventListener("click", function(){
+        window.deleteItem(card.id, type, item.id);
+      });
+
+      row.appendChild(textInput);
+      row.appendChild(weightInput);
+      row.appendChild(delBtn);
+      wrap.appendChild(row);
+    });
+
+    return wrap;
+  }
+
+  // ---------- menu toggling ----------
+
+  window.toggleMenu = function(id){
+    var menu = document.getElementById(id);
+    var isOpen = menu.classList.contains("open");
+    document.querySelectorAll(".menu").forEach(function(m){ m.classList.remove("open"); });
+    if (!isOpen) menu.classList.add("open");
+  };
+
+  document.addEventListener("click", function(e){
+    if (!e.target.closest(".dropdown")){
+      document.querySelectorAll(".menu").forEach(function(m){ m.classList.remove("open"); });
+    }
+  });
+
+  // ---------- export ----------
+
+  window.exportJSON = function(){
+    toggleMenu("exportMenu");
+    var content = JSON.stringify(appData, null, 2);
+    downloadBlob(content, "decision-cards-" + todayStr() + ".json", "application/json");
+    showToast("JSON exported");
+  };
+
+  window.exportCSV = function(){
+    toggleMenu("exportMenu");
+    var res = getFilteredSortedForExport();
+    var rows = [["Rank","Title","Description","Pros Score","Cons Score","Net Score","Number of Pros","Number of Cons"]];
+    res.list.forEach(function(c){
+      var s = res.scoreMap[c.id];
+      rows.push([
+        res.ranks[c.id],
+        c.title,
+        c.description,
+        formatNumber(s.pros),
+        formatNumber(s.cons),
+        formatNet(s.net),
+        c.pros.length,
+        c.cons.length
+      ]);
+    });
+    var csv = rows.map(function(r){ return r.map(csvEscape).join(","); }).join("\r\n");
+    downloadBlob(csv, "decision-cards-" + todayStr() + ".csv", "text/csv");
+    showToast("CSV exported");
+  };
+
+  function getFilteredSortedForExport(){
+    // export uses ALL cards, ranked, sorted by rank
+    var scoreMap = computeAllScores(appData.cards);
+    var ranks = computeRanks(appData.cards, scoreMap);
+    var list = appData.cards.slice().sort(function(a,b){ return ranks[a.id]-ranks[b.id]; });
+    return { list: list, scoreMap: scoreMap, ranks: ranks };
+  }
+
+  window.exportHTMLReport = function(){
+    toggleMenu("exportMenu");
+    var res = getFilteredSortedForExport();
+    var html = buildHtmlReport(res.list, res.scoreMap, res.ranks);
+    downloadBlob(html, "decision-cards-report-" + todayStr() + ".html", "text/html");
+    showToast("HTML report exported");
+  };
+
+  function buildHtmlReport(list, scoreMap, ranks){
+    var dateStr = new Date().toString();
+    var rowsHtml = list.map(function(c){
+      var s = scoreMap[c.id];
+      return "<tr>" +
+        "<td>#" + ranks[c.id] + "</td>" +
+        "<td>" + escapeHtml(c.title || "(untitled)") + "</td>" +
+        "<td class=\"num\">" + formatNumber(s.pros) + "</td>" +
+        "<td class=\"num\">" + formatNumber(s.cons) + "</td>" +
+        "<td class=\"num " + (s.net>=0?"pos":"neg") + "\">" + formatNet(s.net) + "</td>" +
+        "</tr>";
+    }).join("");
+
+    var cardsHtml = list.map(function(c){
+      var s = scoreMap[c.id];
+      var prosHtml = c.pros.length ? ("<ul>" + c.pros.map(function(p){
+        return "<li>" + escapeHtml(p.text || "(no text)") + " <span class=\"weight\">(weight: " + formatNumber(toNumber(p.weight)) + ")</span></li>";
+      }).join("") + "</ul>") : "<p class=\"muted\">No pros listed.</p>";
+
+      var consHtml = c.cons.length ? ("<ul>" + c.cons.map(function(p){
+        return "<li>" + escapeHtml(p.text || "(no text)") + " <span class=\"weight\">(weight: " + formatNumber(toNumber(p.weight)) + ")</span></li>";
+      }).join("") + "</ul>") : "<p class=\"muted\">No cons listed.</p>";
+
+      return "<section class=\"report-card\">" +
+        "<h3>#" + ranks[c.id] + " — " + escapeHtml(c.title || "(untitled)") + "</h3>" +
+        (c.description ? ("<p class=\"desc\">" + escapeHtml(c.description) + "</p>") : "") +
+        "<div class=\"cols\">" +
+          "<div><h4>Pros</h4>" + prosHtml + "</div>" +
+          "<div><h4>Cons</h4>" + consHtml + "</div>" +
+        "</div>" +
+        "<p class=\"scores\">Pros Score: <strong>" + formatNumber(s.pros) + "</strong> &nbsp; " +
+          "Cons Score: <strong>" + formatNumber(s.cons) + "</strong> &nbsp; " +
+          "Net Score: <strong class=\"" + (s.net>=0?"pos":"neg") + "\">" + formatNet(s.net) + "</strong></p>" +
+        "</section>";
+    }).join("");
+
+    return "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"UTF-8\">" +
+      "<title>Decision Cards Report</title><style>" +
+      "body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;max-width:900px;margin:0 auto;padding:24px;color:#1e222a;background:#fff;}" +
+      "h1{font-size:22px;margin-bottom:2px;} .meta{color:#6b7280;font-size:13px;margin-bottom:20px;}" +
+      "table{border-collapse:collapse;width:100%;margin-bottom:28px;} th,td{border:1px solid #e0e2e7;padding:7px 10px;text-align:left;font-size:13px;}" +
+      "th{background:#fafafb;} td.num{text-align:right;} .pos{color:#1a7f37;} .neg{color:#b3261e;}" +
+      ".report-card{border:1px solid #e0e2e7;border-radius:5px;padding:16px;margin-bottom:16px;}" +
+      ".report-card h3{margin:0 0 6px 0;font-size:16px;} .desc{color:#4b5563;margin:0 0 10px 0;}" +
+      ".cols{display:flex;gap:24px;flex-wrap:wrap;} .cols>div{flex:1;min-width:220px;}" +
+      ".cols h4{font-size:12px;text-transform:none;color:#6b7280;margin:0 0 4px 0;}" +
+      "ul{margin:0;padding-left:18px;} li{margin-bottom:3px;font-size:13px;} .weight{color:#6b7280;font-size:12px;}" +
+      ".muted{color:#9ca3af;font-size:13px;margin:0;} .scores{margin-top:10px;font-size:13px;}" +
+      "</style></head><body>" +
+      "<h1>Decision Cards Report</h1>" +
+      "<div class=\"meta\">Generated " + escapeHtml(dateStr) + "</div>" +
+      "<table><thead><tr><th>Rank</th><th>Option</th><th>Pros</th><th>Cons</th><th>Net</th></tr></thead><tbody>" +
+      rowsHtml + "</tbody></table>" +
+      cardsHtml +
+      "</body></html>";
+  }
+
+  // ---------- import ----------
+
+  window.triggerImport = function(){
+    toggleMenu("exportMenu");
+    document.getElementById("importFile").value = "";
+    document.getElementById("importFile").click();
+  };
+
+  document.getElementById("importFile").addEventListener("change", function(e){
+    var file = e.target.files && e.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function(){
+      handleImportContent(reader.result);
+    };
+    reader.onerror = function(){
+      alert("Could not read that file.");
+    };
+    reader.readAsText(file);
+  });
+
+  function handleImportContent(text){
+    var parsed;
+    try{
+      parsed = JSON.parse(text);
+    }catch(e){
+      alert("Import failed: the file is not valid JSON.");
+      return;
+    }
+    if (!validateData(parsed)){
+      alert("Import failed: the file does not match the expected Decision Cards format.");
+      return;
+    }
+
+    if (corrupted){
+      // recovering from corrupted local data: just adopt this data, no need to "replace" a valid backup
+      appData = normalizeData(parsed);
+      corrupted = false;
+      saveData();
+      render();
+      showToast("Data recovered from import");
+      return;
+    }
+
+    if (!confirm("Importing will replace your current data (a backup of the current data will be kept). Continue?")) {
+      return;
+    }
+
+    try{
+      localStorage.setItem(BACKUP_KEY, JSON.stringify(appData));
+    }catch(e){
+      // if backup fails, still proceed but warn
+      showToast("Warning: could not save a backup before import");
+    }
+
+    appData = normalizeData(parsed);
+    saveData();
+    render();
+    showToast("Import successful. Previous data backed up.");
+  }
+
+  window.restoreBackup = function(){
+    var raw;
+    try{
+      raw = localStorage.getItem(BACKUP_KEY);
+    }catch(e){ raw = null; }
+    if (!raw){
+      alert("No backup available to restore.");
+      return;
+    }
+    var parsed;
+    try{
+      parsed = JSON.parse(raw);
+    }catch(e){
+      alert("The stored backup is unreadable.");
+      return;
+    }
+    if (!validateData(parsed)){
+      alert("The stored backup does not match the expected format.");
+      return;
+    }
+    if (!confirm("Restore the previous backup? This will replace your current data.")) return;
+
+    // keep current as a fresh backup too, so restore doesn't destroy anything
+    try{
+      localStorage.setItem(BACKUP_KEY, JSON.stringify(appData));
+    }catch(e){}
+
+    appData = normalizeData(parsed);
+    corrupted = false;
+    saveData();
+    render();
+    showToast("Previous data restored");
+  };
+
+  function refreshRestoreButton(){
+    var btn = document.getElementById("restoreBtn");
+    if (!btn) return;
+    var has;
+    try{
+      has = !!localStorage.getItem(BACKUP_KEY);
+    }catch(e){ has = false; }
+    btn.style.display = has ? "inline-block" : "none";
+  }
+
+  window.startFreshAfterCorruption = function(){
+    if (!confirm("This will permanently erase the unreadable data on this device and start with an empty set of cards. This cannot be undone. Continue?")) return;
+    appData = emptyData();
+    corrupted = false;
+    saveData();
+    render();
+    showToast("Started fresh");
+  };
+
+  // ---------- init ----------
+
+  loadData();
+  render();
+
+})();
+</script>
+</body>
+</html>
